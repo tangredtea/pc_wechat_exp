@@ -1,15 +1,15 @@
 # -*- mode: python ; coding: utf-8 -*-
 from PyInstaller.utils.hooks import collect_all
 
-datas = [('src', 'src')]
+datas = [('src', 'src'), ('tools\\silk_decoder.exe', 'tools'), ('tools\\silk_decoder.c', 'tools')]
 binaries = []
-hiddenimports = ['Crypto.Cipher.AES', 'openpyxl', 'jieba', 'jieba.posseg']
+hiddenimports = ['Crypto.Cipher.AES', 'Crypto.Util.Padding', 'flask', 'werkzeug', 'jinja2', 'blackboxprotobuf', 'zstandard', 'openpyxl', 'jieba', 'jieba.posseg', 'requests', 'pypinyin']
 tmp_ret = collect_all('jieba')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 
 
 a = Analysis(
-    ['src\\main.py'],
+    ['D:\\perl_wrk\\PC_Wechat\\wechat-exp\\src\\main.py'],
     pathex=[],
     binaries=binaries,
     datas=datas,
@@ -17,7 +17,7 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    excludes=['pytest', '_pytest', 'tkinter', '_tkinter', 'turtle', 'idlelib', 'ensurepip', 'pip', 'setuptools', 'wheel', 'pkg_resources', 'multiprocessing', 'concurrent.futures.process', 'lib2to3', 'xmlrpc', 'pydoc', 'doctest', 'bdb'],
     noarchive=False,
     optimize=0,
 )
@@ -32,7 +32,7 @@ exe = EXE(
     name='wechat_exp',
     debug=False,
     bootloader_ignore_signals=False,
-    strip=False,
+    strip=True,
     upx=True,
     upx_exclude=[],
     runtime_tmpdir=None,
