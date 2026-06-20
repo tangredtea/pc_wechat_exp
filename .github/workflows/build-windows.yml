@@ -39,12 +39,8 @@ jobs:
 
       - name: Build EXE with PyInstaller
         shell: pwsh
-        env:
-          SOURCE_DATE_EPOCH: ${{ github.event.head_commit.timestamp }}
         run: |
-          if (-not $env:SOURCE_DATE_EPOCH) {
-            $env:SOURCE_DATE_EPOCH = [int][double]::Parse((Get-Date -UFormat %s))
-          }
+          if (Test-Path wechat_exp.spec) { Remove-Item wechat_exp.spec }
           python -m PyInstaller `
             --onefile `
             --console `
