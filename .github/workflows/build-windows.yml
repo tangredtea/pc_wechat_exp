@@ -27,8 +27,15 @@ jobs:
       - name: Generate version metadata
         shell: pwsh
         run: |
-          $version = python -c "from datetime import datetime,timezone; now=datetime.now(timezone.utc); v=f'2.3.{now.strftime(''%Y%m%d'')}'; open('file_version.txt','w',encoding='utf-8').write(v); print(v)"
-          echo "APP_VERSION=$version" >> $env:GITHUB_ENV
+          @'
+          from datetime import datetime, timezone
+          now = datetime.now(timezone.utc)
+          v = "2.3." + now.strftime("%Y%m%d")
+          open("file_version.txt", "w", encoding="utf-8").write(v)
+          print(v)
+          '@ | Set-Content -Encoding utf8 gen_ver.py
+          $version = python gen_ver.py
+          "APP_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
       - name: Build EXE with PyInstaller
         shell: pwsh
