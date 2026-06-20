@@ -23,10 +23,11 @@ echo [*] Installing/updating dependencies...
 "%PIP%" install -r "%~dp0requirements-build.txt"
 
 echo.
-echo [*] Downloading Whisper model for offline voice transcription...
-"%PYTHON%" "%~dp0scripts\download_whisper_model.py"
-if %errorlevel% neq 0 (
-    echo [!] Model download failed — continuing build (voice transcription will use CDN fallback)
+echo [*] Preparing optional assets...
+if exist "%~dp0scripts\download_whisper_model.py" (
+    "%PYTHON%" "%~dp0scripts\download_whisper_model.py"
+) else (
+    echo [!] Whisper model script not found — skipping (voice transcription may use CDN fallback)
 )
 
 echo.
@@ -51,15 +52,16 @@ set /p BUILD_DATE=<"%TEMP%\wexp_date.txt"
 echo [*] Build version date: %BUILD_DATE%
 
 echo [*] Generating version info file...
-"%PYTHON%" "%~dp0scripts\gen_version_file.py"
-set /p APP_VERSION=<"%~dp0file_version.txt"
+"%PYTHON%" -c "from datetime import datetime,timezone; now=datetime.now(timezone.utc); v='2.3.'+now.strftime('%%Y%%m%%d'); open(r'%~dp0file_version.txt','w',encoding='utf-8').write(v); print(v)" > "%TEMP%\wexp_version.txt"
+set /p APP_VERSION=<"%TEMP%\wexp_version.txt"
 echo [*] App version: %APP_VERSION%
 
 echo.
 echo [*] Building README.html manual...
-"%PYTHON%" "%~dp0scripts\build_readme_html.py"
-if %errorlevel% neq 0 (
-    echo [!] Manual generation failed — continuing build without manual
+if exist "%~dp0scripts\build_readme_html.py" (
+    "%PYTHON%" "%~dp0scripts\build_readme_html.py"
+) else (
+    echo [!] Manual generation script not found — continuing build without manual
 )
 
 "%PYTHON%" -m PyInstaller ^

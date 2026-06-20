@@ -10,6 +10,7 @@ class WizardPage {
     this.progressDetailId = options.progressDetailId || 'progress-detail';
     this.steps = options.steps || [];
     this.apiUrl = options.apiUrl || '';
+    this.getApiUrl = options.getApiUrl || (() => this.apiUrl);
     this.method = options.method || 'POST';
     this.getBody = options.getBody || (() => ({}));
     this.chatFieldId = options.chatFieldId || 'cfg-chat';
@@ -49,7 +50,7 @@ class WizardPage {
       this._selectedDisplayName = '';
     }
 
-    this.sse = new SseProgress(this.apiUrl, {
+    this.sse = new SseProgress(this.getApiUrl(), {
       method: this.method,
       body: body,
       onProgress: (data) => this.handleProgress(data),
@@ -178,6 +179,15 @@ class WizardPage {
       link.href = result.view_url;
       link.target = '_blank';
       link.textContent = '📊 在新标签页打开词云报告';
+      link.style.cssText = linkStyle;
+      container.appendChild(link);
+    } else if (result.download_url && result.chat_count) {
+      container.innerHTML = '<p style="color:#8b949e;margin:0 0 8px 0">共导出 ' +
+        result.chat_count.toLocaleString() + ' 个聊天，' +
+        (result.msg_count || 0).toLocaleString() + ' 条消息</p>';
+      const link = document.createElement('a');
+      link.href = result.download_url;
+      link.textContent = '📥 下载 ZIP 压缩包 (' + (result.filename || '') + ')';
       link.style.cssText = linkStyle;
       container.appendChild(link);
     } else if (result.download_url) {

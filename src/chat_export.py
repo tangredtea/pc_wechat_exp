@@ -400,8 +400,11 @@ def _format_content(content, base_type, is_group):
 
 
 def export_all_contacts(decrypted_dir, out_dir, start_ts=None, end_ts=None,
-                        keyword=None, name_filter=None, print_fn=None, progress_fn=None):
+                        keyword=None, name_filter=None, print_fn=None,
+                        progress_fn=None, fmt='txt', chats=None):
     """导出所有匹配联系人的聊天记录。
+    Args:
+        chats: 预扫描的聊天列表；为 None 时自动 scan_chats。
     Returns: [(name, msg_count, file_path), ...]
     """
     from chat_list import scan_chats
@@ -411,22 +414,23 @@ def export_all_contacts(decrypted_dir, out_dir, start_ts=None, end_ts=None,
     if progress_fn is None:
         progress_fn = lambda pct, msg: None
 
-    chats, _, _ = scan_chats(decrypted_dir)
+    if chats is None:
+        chats, _, _ = scan_chats(decrypted_dir)
+
+    if name_filter:
+        kw = name_filter.lower()
+        chats = [c for c in chats
+                 if kw in c["display_name"].lower() or kw in c["username"].lower()]
 
     results = []
-    total = len(chats)
+    total = max(len(chats), 1)
 
     for i, c in enumerate(chats):
-        if name_filter:
-            kw = name_filter.lower()
-            if kw not in c["display_name"].lower() and kw not in c["username"].lower():
-                continue
-
-        pct = int((i + 1) / total * 100)
-        progress_fn(pct, f"导出: {c['display_name']}")
+        pct = (i + 1) / total
+        progress_fn(pct, f"导出 ({i + 1}/{len(chats)}): {c['display_name']}")
 
         count, path = export_chat(c, out_dir, start_ts, end_ts, keyword,
-                                  print_fn=print_fn)
+                                  print_fn=print_fn, fmt=fmt)
         if count > 0:
             results.append((c["display_name"], count, path))
             print_fn(f"  {c['display_name']}: {count} 条消息 -> {os.path.basename(path)}")

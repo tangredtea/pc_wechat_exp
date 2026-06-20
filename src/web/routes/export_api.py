@@ -5,6 +5,7 @@ import re
 import sqlite3
 import sys
 import threading
+import zipfile
 from collections import defaultdict
 from datetime import datetime
 from flask import Blueprint, request, current_app, jsonify, send_from_directory
@@ -26,6 +27,34 @@ _stdout_lock = threading.Lock()
 
 def _decrypted_dir():
     return current_app.config.get('DECRYPTED_DIR', '')
+
+
+def _parse_export_dates(date_start: str, date_end: str):
+    """Parse optional YYYY-MM-DD date range into unix timestamps."""
+    from engine.constants import TZ
+    start_ts = None
+    end_ts = None
+    if date_start:
+        dt = datetime.strptime(date_start, '%Y-%m-%d').replace(tzinfo=TZ)
+        start_ts = int(dt.timestamp())
+    if date_end:
+        dt = datetime.strptime(date_end, '%Y-%m-%d').replace(
+            hour=23, minute=59, second=59, tzinfo=TZ)
+        end_ts = int(dt.timestamp())
+    return start_ts, end_ts
+
+
+def _resolve_all_chats(decrypted_dir: str, name_filter: str = ""):
+    """Scan chats from standard or flat backup layout."""
+    from chat_list import scan_chats
+    chats, _, _ = scan_chats(decrypted_dir)
+    if not chats:
+        chats = _scan_chats_flat(decrypted_dir, name_filter)
+    elif name_filter:
+        kw = name_filter.lower()
+        chats = [c for c in chats
+                 if kw in c['display_name'].lower() or kw in c['username'].lower()]
+    return chats
 
 
 def _scan_chats_flat(decrypted_dir: str, name_filter: str = ""):
@@ -162,15 +191,10 @@ def export_chat():
 
     def _run():
         try:
-            from chat_list import scan_chats
             from chat_export import export_chat
-            from engine.constants import TZ
 
             push('export', '正在扫描聊天列表...', 0.1)
-            all_chats, _, _ = scan_chats(decrypted_dir)
-            if not all_chats:
-                # Flat backup layout (no contact/session subdirs)
-                all_chats = _scan_chats_flat(decrypted_dir, contact)
+            all_chats = _resolve_all_chats(decrypted_dir)
 
             target = None
             # Exact match first
@@ -203,14 +227,7 @@ def export_chat():
                     push.select(fuzzy_matches)
                     return
 
-            start_ts = None
-            end_ts = None
-            if date_start:
-                dt = datetime.strptime(date_start, '%Y-%m-%d').replace(tzinfo=TZ)
-                start_ts = int(dt.timestamp())
-            if date_end:
-                dt = datetime.strptime(date_end, '%Y-%m-%d').replace(hour=23, minute=59, second=59, tzinfo=TZ)
-                end_ts = int(dt.timestamp())
+            start_ts, end_ts = _parse_export_dates(date_start, date_end)
 
             out_dir = os.path.join(_DATA_ROOT, 'export')
             os.makedirs(out_dir, exist_ok=True)
@@ -228,6 +245,74 @@ def export_chat():
                 push.done({'msg_count': count, 'download_url': download_url, 'filename': fname})
             else:
                 push.done({'msg_count': count, 'file': filepath})
+        except Exception as e:
+            push.error(str(e))
+
+    threading.Thread(target=_run, daemon=True).start()
+    return sse_response(gen)
+
+
+@export_bp.route('/chat-all', methods=['POST'])
+def export_chat_all():
+    """POST /api/export/chat-all — Export all chat sessions to a ZIP archive."""
+    data = request.get_json(silent=True) or {}
+    date_start = data.get('date_start', '')
+    date_end = data.get('date_end', '')
+    fmt = data.get('format', 'txt')
+
+    decrypted_dir = _decrypted_dir()
+    push, gen = create_sse_progress()
+
+    def _run():
+        try:
+            from chat_export import export_all_contacts
+
+            push('export', '正在扫描全部聊天...', 0.05)
+            all_chats = _resolve_all_chats(decrypted_dir)
+            if not all_chats:
+                push.error('未找到任何聊天记录，请先执行全量备份')
+                return
+
+            push('export', f'共 {len(all_chats)} 个聊天，开始导出...', 0.1)
+            start_ts, end_ts = _parse_export_dates(date_start, date_end)
+
+            ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+            out_dir = os.path.join(_DATA_ROOT, 'export')
+            batch_dir = os.path.join(out_dir, f'all_chats_{ts}')
+            os.makedirs(batch_dir, exist_ok=True)
+
+            def _print(msg):
+                push('export', str(msg), 0.5)
+
+            def _progress(pct, msg):
+                push('export', msg, 0.1 + pct * 0.75)
+
+            results = export_all_contacts(
+                decrypted_dir, batch_dir,
+                start_ts=start_ts, end_ts=end_ts,
+                print_fn=_print, progress_fn=_progress,
+                fmt=fmt, chats=all_chats,
+            )
+
+            if not results:
+                push.error('没有可导出的消息（请检查日期范围或备份是否完整）')
+                return
+
+            push('export', '正在打包 ZIP...', 0.9)
+            zip_name = f'all_chats_{ts}.zip'
+            zip_path = os.path.join(out_dir, zip_name)
+            with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
+                for _, _, path in results:
+                    if path and os.path.isfile(path):
+                        zf.write(path, os.path.basename(path))
+
+            total_msgs = sum(count for _, count, _ in results)
+            push.done({
+                'chat_count': len(results),
+                'msg_count': total_msgs,
+                'download_url': f'/api/export/download/{zip_name}',
+                'filename': zip_name,
+            })
         except Exception as e:
             push.error(str(e))
 

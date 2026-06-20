@@ -1,0 +1,90 @@
+name: Build Windows EXE
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [master, main]
+    paths:
+      - 'src/**'
+      - 'tools/**'
+      - 'requirements-build.txt'
+      - 'build.bat'
+      - '.github/workflows/build-windows.yml'
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install build dependencies
+        run: pip install -r requirements-build.txt
+
+      - name: Generate version metadata
+        shell: pwsh
+        run: |
+          $version = python -c "from datetime import datetime,timezone; now=datetime.now(timezone.utc); v=f'2.3.{now.strftime(''%Y%m%d'')}'; open('file_version.txt','w',encoding='utf-8').write(v); print(v)"
+          echo "APP_VERSION=$version" >> $env:GITHUB_ENV
+
+      - name: Build EXE with PyInstaller
+        shell: pwsh
+        env:
+          SOURCE_DATE_EPOCH: ${{ github.event.head_commit.timestamp }}
+        run: |
+          if (-not $env:SOURCE_DATE_EPOCH) {
+            $env:SOURCE_DATE_EPOCH = [int][double]::Parse((Get-Date -UFormat %s))
+          }
+          python -m PyInstaller `
+            --onefile `
+            --console `
+            --name wechat_exp `
+            --version-file file_version_info.txt `
+            --add-data "src;src" `
+            --add-data "tools\silk_decoder.exe;tools" `
+            --add-data "tools\silk_decoder.c;tools" `
+            --hidden-import Crypto.Cipher.AES `
+            --hidden-import Crypto.Util.Padding `
+            --hidden-import flask `
+            --hidden-import werkzeug `
+            --hidden-import jinja2 `
+            --hidden-import blackboxprotobuf `
+            --hidden-import zstandard `
+            --hidden-import openpyxl `
+            --hidden-import jieba `
+            --hidden-import jieba.posseg `
+            --hidden-import requests `
+            --hidden-import pypinyin `
+            --collect-all jieba `
+            --exclude-module pytest `
+            --exclude-module _pytest `
+            --exclude-module tkinter `
+            --exclude-module _tkinter `
+            --exclude-module turtle `
+            --exclude-module idlelib `
+            --exclude-module ensurepip `
+            --exclude-module pip `
+            --exclude-module setuptools `
+            --exclude-module wheel `
+            --exclude-module pkg_resources `
+            --exclude-module multiprocessing `
+            --exclude-module concurrent.futures.process `
+            --exclude-module lib2to3 `
+            --exclude-module xmlrpc `
+            --exclude-module pydoc `
+            --exclude-module doctest `
+            --exclude-module bdb `
+            --strip `
+            src\main.py
+          $dest = "dist\wechat_exp_$env:APP_VERSION.exe"
+          Move-Item -Force dist\wechat_exp.exe $dest
+          echo "BUILT_EXE=$dest" >> $env:GITHUB_ENV
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wechat_exp-windows
+          path: dist/wechat_exp_*.exe
