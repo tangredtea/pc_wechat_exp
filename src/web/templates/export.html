@@ -21,8 +21,16 @@
   <div class="form-row" id="single-contact-row" style="margin-top:8px">
     <div style="flex:2"><label>联系人/群聊标识</label><input id="cfg-contact" placeholder="例如: wxid_abc123 或 张三"></div>
   </div>
+  <div class="form-row" id="all-export-options" style="display:none;margin-top:8px;align-items:center">
+    <div style="flex:1">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;color:#c9d1d9;font-size:13px">
+        <input id="cfg-skip-groups" type="checkbox" checked style="width:16px;height:16px">
+        跳过群聊（仅导出私聊）
+      </label>
+    </div>
+  </div>
   <div id="all-export-hint" style="display:none;margin-top:8px;padding:10px 14px;background:#161b22;border:1px solid #30363d;border-radius:8px;color:#8b949e;font-size:12px;line-height:1.6">
-    将全部聊天导出为独立文件并打包为 ZIP 下载。日期留空表示导出全部历史消息。聊天数量较多时可能需要几分钟。
+    将全部聊天导出为独立文件并打包为 ZIP 下载。勾选「跳过群聊」则只导出私聊。日期留空表示导出全部历史消息。
   </div>
 </div>
 
@@ -65,12 +73,14 @@
 <script>
 const modeSelect = document.getElementById('cfg-mode');
 const singleRow = document.getElementById('single-contact-row');
+const allOptions = document.getElementById('all-export-options');
 const allHint = document.getElementById('all-export-hint');
 const runBtn = document.getElementById('btn-run');
 
 function updateExportMode() {
   const isAll = modeSelect.value === 'all';
   singleRow.style.display = isAll ? 'none' : 'flex';
+  allOptions.style.display = isAll ? 'flex' : 'none';
   allHint.style.display = isAll ? 'block' : 'none';
   runBtn.textContent = isAll ? '开始全量导出' : '开始导出';
 }
@@ -88,6 +98,7 @@ new WizardPage({
     date_start: document.getElementById('cfg-start').value,
     date_end: document.getElementById('cfg-end').value,
     format: document.getElementById('cfg-format').value,
+    skip_groups: document.getElementById('cfg-skip-groups').checked,
   }),
 });
 </script>

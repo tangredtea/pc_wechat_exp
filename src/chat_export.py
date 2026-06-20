@@ -401,10 +401,12 @@ def _format_content(content, base_type, is_group):
 
 def export_all_contacts(decrypted_dir, out_dir, start_ts=None, end_ts=None,
                         keyword=None, name_filter=None, print_fn=None,
-                        progress_fn=None, fmt='txt', chats=None):
+                        progress_fn=None, fmt='txt', chats=None,
+                        skip_groups=False):
     """导出所有匹配联系人的聊天记录。
     Args:
         chats: 预扫描的聊天列表；为 None 时自动 scan_chats。
+        skip_groups: 为 True 时跳过群聊（@chatroom）。
     Returns: [(name, msg_count, file_path), ...]
     """
     from chat_list import scan_chats
@@ -416,6 +418,10 @@ def export_all_contacts(decrypted_dir, out_dir, start_ts=None, end_ts=None,
 
     if chats is None:
         chats, _, _ = scan_chats(decrypted_dir)
+
+    if skip_groups:
+        chats = [c for c in chats if not c.get('is_group')
+                 and not (c.get('username') or '').endswith('@chatroom')]
 
     if name_filter:
         kw = name_filter.lower()

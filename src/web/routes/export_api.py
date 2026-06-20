@@ -169,6 +169,7 @@ def _scan_chats_flat(decrypted_dir: str, name_filter: str = ""):
             "username": uname,
             "display_name": display,
             "msg_count": info["total_msgs"],
+            "is_group": uname.endswith("@chatroom"),
             "tables": info["tables"],
         })
 
@@ -259,6 +260,7 @@ def export_chat_all():
     date_start = data.get('date_start', '')
     date_end = data.get('date_end', '')
     fmt = data.get('format', 'txt')
+    skip_groups = bool(data.get('skip_groups', False))
 
     decrypted_dir = _decrypted_dir()
     push, gen = create_sse_progress()
@@ -271,6 +273,17 @@ def export_chat_all():
             all_chats = _resolve_all_chats(decrypted_dir)
             if not all_chats:
                 push.error('未找到任何聊天记录，请先执行全量备份')
+                return
+
+            if skip_groups:
+                before = len(all_chats)
+                all_chats = [c for c in all_chats
+                             if not c.get('is_group')
+                             and not (c.get('username') or '').endswith('@chatroom')]
+                push('export', f'已跳过群聊，剩余 {len(all_chats)} 个私聊（共 {before} 个）', 0.08)
+
+            if not all_chats:
+                push.error('过滤后没有可导出的私聊')
                 return
 
             push('export', f'共 {len(all_chats)} 个聊天，开始导出...', 0.1)
@@ -291,7 +304,7 @@ def export_chat_all():
                 decrypted_dir, batch_dir,
                 start_ts=start_ts, end_ts=end_ts,
                 print_fn=_print, progress_fn=_progress,
-                fmt=fmt, chats=all_chats,
+                fmt=fmt, chats=all_chats, skip_groups=False,
             )
 
             if not results:
@@ -299,7 +312,8 @@ def export_chat_all():
                 return
 
             push('export', '正在打包 ZIP...', 0.9)
-            zip_name = f'all_chats_{ts}.zip'
+            zip_label = 'private' if skip_groups else 'all'
+            zip_name = f'{zip_label}_chats_{ts}.zip'
             zip_path = os.path.join(out_dir, zip_name)
             with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
                 for _, _, path in results:
