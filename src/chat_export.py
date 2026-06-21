@@ -406,7 +406,7 @@ def export_all_contacts(decrypted_dir, out_dir, start_ts=None, end_ts=None,
     """导出所有匹配联系人的聊天记录。
     Args:
         chats: 预扫描的聊天列表；为 None 时自动 scan_chats。
-        skip_groups: 为 True 时跳过群聊（@chatroom）。
+        skip_groups: 为 True 时仅导出真人私聊（排除群聊/公众号/助手等）。
     Returns: [(name, msg_count, file_path), ...]
     """
     from chat_list import scan_chats
@@ -420,8 +420,10 @@ def export_all_contacts(decrypted_dir, out_dir, start_ts=None, end_ts=None,
         chats, _, _ = scan_chats(decrypted_dir)
 
     if skip_groups:
-        chats = [c for c in chats if not c.get('is_group')
-                 and not (c.get('username') or '').endswith('@chatroom')]
+        from chat_filter import filter_real_private_chats
+        from engine.utils import load_contacts
+        _, _, friend_usernames = load_contacts(decrypted_dir)
+        chats = filter_real_private_chats(chats, friend_usernames=friend_usernames)
 
     if name_filter:
         kw = name_filter.lower()

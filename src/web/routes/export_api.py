@@ -276,14 +276,15 @@ def export_chat_all():
                 return
 
             if skip_groups:
+                from chat_filter import filter_real_private_chats
+                from engine.utils import load_contacts
                 before = len(all_chats)
-                all_chats = [c for c in all_chats
-                             if not c.get('is_group')
-                             and not (c.get('username') or '').endswith('@chatroom')]
-                push('export', f'已跳过群聊，剩余 {len(all_chats)} 个私聊（共 {before} 个）', 0.08)
+                _, _, friend_usernames = load_contacts(decrypted_dir)
+                all_chats = filter_real_private_chats(all_chats, friend_usernames=friend_usernames)
+                push('export', f'已过滤非真人私聊，剩余 {len(all_chats)} 个（共 {before} 个）', 0.08)
 
             if not all_chats:
-                push.error('过滤后没有可导出的私聊')
+                push.error('过滤后没有可导出的真人私聊')
                 return
 
             push('export', f'共 {len(all_chats)} 个聊天，开始导出...', 0.1)
